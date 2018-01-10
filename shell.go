@@ -1,29 +1,68 @@
 package tlkn
 
 import (
+	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 )
 
-// Bash executes the given bash command string
-func Bash(cmd string) error {
-	cmd = trimLefts(cmd)
-	c := BashCmd(cmd)
-	c.Stderr = os.Stderr
-	c.Stdout = os.Stdout
-	return c.Run()
+// Debug will enable debug logging
+var Debug bool
+
+// ExitError alias
+type ExitError = exec.ExitError
+
+func logDebug(v ...interface{}) {
+	if !Debug {
+		return
+	}
+	fmt.Println("[tlkn debug]\n", fmt.Sprint(v...))
 }
 
 // Bash executes the given bash command string
-func BashCmd(cmd string) *exec.Cmd {
+func Bash(ctx context.Context, cmd string) ([]byte, error) {
 	cmd = trimLefts(cmd)
-	bash := exec.Command("bash", "-c", cmd)
-	bash.Stdout = os.Stdout
-	bash.Stderr = os.Stderr
-	return bash
+	bash := exec.CommandContext(ctx, "bash", "-c", cmd)
+	return bash.Output()
+}
+
+// BashCmd creates an unexecuted Bash func
+func BashCmd(ctx context.Context, cmd string) func() error {
+	return func() error {
+		out, err := Bash(ctx, cmd)
+		logDebug(fmt.Sprintf(" bash: %v\n  stdout: %#v\n  stderr: %+#v", cmd, string(out), err))
+		return err
+	}
+}
+
+func Parallel(fns ...func() error) error {
+	errCh := make(chan error)
+	var wg sync.WaitGroup
+
+	for _, fn := range fns {
+		wg.Add(1)
+		go func(fn func() error) {
+			err := fn()
+			if err != nil {
+				errCh <- err
+			}
+			wg.Done()
+		}(fn)
+	}
+
+	go func() {
+		wg.Wait()
+		close(errCh)
+	}()
+
+	for err := range errCh {
+		return err
+	}
+
+	return nil
 }
 
 // Prompt prompts user for input with default value.
