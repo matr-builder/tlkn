@@ -2,19 +2,59 @@
 
 matr builder basic helper util funcs
 
-## Bash(cmd string) (out []byte, err error) 
+## Debug mode
+
+To enable debug mode set debug to true
+
+```go
+  tlkn.Debug = true
+```
+
+## Bash(ctx context.Context, cmd string) (out []byte, err error) 
 **Note: leading whitespace will be trimmed.
 On multi-line strings each line's leading whitespace will be trimmed**
 
 ```go
   // one liner
-  err := tlkn.Bash("ls -la")
+  err := tlkn.Bash(context.Background(), "ls -la")
 
   // multi line
   // note: each line will be trimmed of leading whitespace
   err := tlkn.Bask(`ls -la
     echo "hello"
   `)
+```
+
+## BashCmd(ctx context.Context, cmd string) func() error
+
+Simple wrapper around Bash func for use with Parallel
+
+```go
+  cmd := tlkn.BashCmd(context.Background(), "ls -la")
+
+  if err := cmd(); err != nil {
+    log.Fatal(err)
+  }
+```
+
+## Parallel(fns ...func error) error
+
+Run multiple funcs in parallel. Exits if any funcs return an error
+
+```go
+  ctx := context.Background()
+
+  err := tlkn.Parallel(
+    tlkn.BashCmd(ctx, "echo \"0\"")
+    tlkn.BashCmd(ctx, "echo \"1\"")
+    tlkn.BashCmd(ctx, "echo \"2\"")
+    tlkn.BashCmd(ctx, "echo \"3\"")
+    tlkn.BashCmd(ctx, "echo \"4\"")
+  )
+
+  if err != nil {
+    log.Fatal(err)
+  }
 ```
 
 ## Prompt(prompt string, args ...interface) (s string)
