@@ -3,6 +3,7 @@ package tlkn
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -22,20 +23,19 @@ func logDebug(v ...interface{}) {
 	fmt.Println("[tlkn debug]\n", fmt.Sprint(v...))
 }
 
-// Bash executes the given bash command string
-func Bash(ctx context.Context, cmd string) ([]byte, error) {
+// BashCmd creates a *exec.Cmd using the given bash command string
+// writes to os.Stderr and os.Stdout by default
+func BashCmd(ctx context.Context, cmd string) *exec.Cmd {
 	cmd = trimLefts(cmd)
 	bash := exec.CommandContext(ctx, "bash", "-c", cmd)
-	return bash.Output()
+	bash.Stderr = os.Stderr
+	bash.Stdout = os.Stdout
+	return bash
 }
 
-// BashCmd creates an unexecuted Bash func
-func BashCmd(ctx context.Context, cmd string) func() error {
-	return func() error {
-		out, err := Bash(ctx, cmd)
-		logDebug(fmt.Sprintf(" bash: %v\n  stdout: %#v\n  stderr: %+#v", cmd, string(out), err))
-		return err
-	}
+// Bash creates an unexecuted BashCmd func
+func Bash(ctx context.Context, cmd string) func() error {
+	return BashCmd(ctx, cmd).Run
 }
 
 func Parallel(fns ...func() error) error {
