@@ -1,13 +1,17 @@
 package tlkn
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
+	"text/template"
 )
 
 // Debug will enable debug logging
@@ -23,19 +27,31 @@ func logDebug(v ...interface{}) {
 	fmt.Println("[tlkn debug]\n", fmt.Sprint(v...))
 }
 
+func Tmpl(tmpl []byte, a interface{}) []byte {
+	// hash template to allow for caching
+	hash := sha256.New()
+	hash.Write(tmpl)
+	sha := string(base64.URLEncoding.EncodeToString(hash.Sum(nil)))
+
+	t, err := template.New(sha).Parse(string(tmpl))
+	if err != nil {
+		os.Stderr.WriteString("Error: could not compile bash template\n")
+		return nil
+	}
+
+	b := bytes.Buffer{}
+	t.Execute(&b, a)
+
+	return b.Bytes()
+}
+
 // BashCmd creates a *exec.Cmd using the given bash command string
 // writes to os.Stderr and os.Stdout by default
 func BashCmd(ctx context.Context, cmd string) *exec.Cmd {
-	cmd = trimLefts(cmd)
-	bash := exec.CommandContext(ctx, "bash", "-c", cmd)
+	bash := exec.CommandContext(ctx, "bash", "-c", trimLefts(cmd))
 	bash.Stderr = os.Stderr
 	bash.Stdout = os.Stdout
 	return bash
-}
-
-// Bash creates an unexecuted BashCmd func
-func Bash(ctx context.Context, cmd string) func() error {
-	return BashCmd(ctx, cmd).Run
 }
 
 func Parallel(fns ...func() error) error {
